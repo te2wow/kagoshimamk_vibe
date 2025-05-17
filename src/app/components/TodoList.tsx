@@ -94,7 +94,7 @@ export function TodoList({ status, title }: TodoListProps) {
       </div>
       
       {/* Todoリスト */}
-      <div className="p-3 min-h-[200px]">
+      <div className="p-3 min-h-[300px]">
         {isClient ? (
           <SortableContext
             items={filteredTodos.map(todo => todo.id)}
@@ -106,16 +106,23 @@ export function TodoList({ status, title }: TodoListProps) {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm"
+                  className="p-4 text-center text-gray-500 dark:text-gray-400 text-sm h-64 flex items-center justify-center"
                 >
-                  タスクがありません
+                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg w-full h-full flex items-center justify-center">
+                    タスクをここにドロップ
+                  </div>
                 </motion.div>
               ) : (
-                filteredTodos.map(todo => (
-                  <DraggableItem key={todo.id} id={todo.id}>
-                    <TodoCard todo={todo} labels={labels} />
-                  </DraggableItem>
-                ))
+                <>
+                  {/* タスクリスト */}
+                  {filteredTodos.map(todo => (
+                    <DraggableItem key={todo.id} id={todo.id}>
+                      <TodoCard todo={todo} labels={labels} />
+                    </DraggableItem>
+                  ))}
+                  {/* 空のドロップエリア */}
+                  <div className="h-8"></div>
+                </>
               )}
             </AnimatePresence>
           </SortableContext>

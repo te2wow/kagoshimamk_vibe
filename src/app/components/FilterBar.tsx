@@ -13,18 +13,23 @@ export function FilterBar() {
   const { theme, toggleTheme } = useTheme();
   const { labels, statusFilter, labelFilter, setStatusFilter, setLabelFilter } = useTodo();
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(true);  // デフォルトはモバイル表示
+  const [mounted, setMounted] = useState(false);
 
   // ブラウザ環境かどうかを検出し、画面サイズを設定
   useEffect(() => {
-    setIsMobile(window.innerWidth < 768);
+    setMounted(true);
     
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
+    // マウント後、実際の画面サイズをチェック
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
     };
     
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   // ステータスフィルター切り替え
@@ -47,6 +52,8 @@ export function FilterBar() {
 
   // ESCキーでフィルターを閉じる
   useEffect(() => {
+    if (!mounted) return;
+    
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setIsFilterOpen(false);
@@ -57,7 +64,7 @@ export function FilterBar() {
     return () => {
       window.removeEventListener('keydown', handleEsc);
     };
-  }, []);
+  }, [mounted]);
 
   return (
     <div className="mb-6 sticky top-0 z-10 bg-white dark:bg-gray-900 shadow-sm pb-2">
@@ -100,7 +107,7 @@ export function FilterBar() {
       
       {/* フィルターUI */}
       <AnimatePresence>
-        {(isFilterOpen || !isMobile) && (
+        {mounted && (isFilterOpen || !isMobile) && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}

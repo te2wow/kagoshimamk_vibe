@@ -13,6 +13,8 @@ interface TodoContextType {
   error: string | null;
   statusFilter: TodoStatus | 'all';
   labelFilter: string | 'all';
+  isAllTasksCompleted: boolean;
+  showPachinkoEffect: boolean;
   
   // Todo操作
   createTodo: (title: string, description: string, status: TodoStatus, labels: string[]) => Promise<void>;
@@ -29,6 +31,9 @@ interface TodoContextType {
   // フィルタリング
   setStatusFilter: (status: TodoStatus | 'all') => void;
   setLabelFilter: (labelId: string | 'all') => void;
+  
+  // パチンコ演出
+  hidePachinkoEffect: () => void;
 }
 
 const TodoContext = createContext<TodoContextType | undefined>(undefined);
@@ -44,156 +49,160 @@ export function TodoProvider({ children }: TodoProviderProps) {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<TodoStatus | 'all'>('all');
   const [labelFilter, setLabelFilter] = useState<string | 'all'>('all');
-  const [isClient, setIsClient] = useState(false);
-
-  // クライアントサイドでの実行を確認
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  const [isAllTasksCompleted, setIsAllTasksCompleted] = useState<boolean>(false);
+  const [showPachinkoEffect, setShowPachinkoEffect] = useState<boolean>(false);
 
   // 初期データの読み込み
   useEffect(() => {
-    // サーバーサイドレンダリング時やハイドレーション中は実行しない
-    if (!isClient) return;
-
-    const loadData = async () => {
+    async function loadInitialData() {
       try {
         setIsLoading(true);
-        
-        // TodoとLabelの取得
-        const [todosData, labelsData] = await Promise.all([
+        const [todoData, labelData] = await Promise.all([
           getAllTodos(),
           getAllLabels()
         ]);
-        
-        // ステータスごとにソート
-        const sortedTodos = todosData.sort((a, b) => a.order - b.order);
-        
-        setTodos(sortedTodos);
-        setLabels(labelsData);
-        setError(null);
+        setTodos(todoData);
+        setLabels(labelData);
       } catch (err) {
-        setError('データの読み込みに失敗しました');
-        console.error(err);
+        setError(`データの読み込みに失敗しました: ${err instanceof Error ? err.message : String(err)}`);
       } finally {
         setIsLoading(false);
       }
-    };
+    }
     
-    loadData();
-  }, [isClient]);
+    loadInitialData();
+  }, []);
 
-  // Todo操作関数
+  // 全てのタスクが完了状態かチェック
+  useEffect(() => {
+    // タスクが存在しない場合はパチンコ演出を表示しない
+    if (todos.length === 0) {
+      setIsAllTasksCompleted(false);
+      return;
+    }
+    
+    // フィルタリングされていない場合のみチェック
+    if (statusFilter === 'all' && labelFilter === 'all') {
+      const allCompleted = todos.length > 0 && todos.every(todo => todo.status === 'done');
+      
+      // 状態が変わった時だけパチンコ演出を表示
+      if (allCompleted && !isAllTasksCompleted) {
+        setShowPachinkoEffect(true);
+      }
+      
+      setIsAllTasksCompleted(allCompleted);
+    }
+  }, [todos, statusFilter, labelFilter, isAllTasksCompleted]);
+
+  // パチンコ演出を非表示
+  const hidePachinkoEffect = () => {
+    setShowPachinkoEffect(false);
+  };
+
+  // Todo追加
   const createTodo = async (title: string, description: string, status: TodoStatus, labels: string[]) => {
-    if (!isClient) return;
     try {
       const newTodo = await addTodo(title, description, status, labels);
-      setTodos(prev => [...prev, newTodo].sort((a, b) => a.order - b.order));
+      setTodos(prev => [...prev, newTodo]);
     } catch (err) {
-      setError('Todoの作成に失敗しました');
-      console.error(err);
+      setError(`Todoの追加に失敗しました: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
+  // Todo更新
   const updateTodoItem = async (todo: Todo) => {
-    if (!isClient) return;
     try {
-      const updatedTodo = await updateTodo(todo);
-      setTodos(prev => prev.map(t => t.id === updatedTodo.id ? updatedTodo : t));
+      await updateTodo(todo);
+      setTodos(prev => prev.map(t => t.id === todo.id ? todo : t));
     } catch (err) {
-      setError('Todoの更新に失敗しました');
-      console.error(err);
+      setError(`Todoの更新に失敗しました: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
-
+  
+  // Todo削除
   const removeTodo = async (id: string) => {
-    if (!isClient) return;
     try {
       await deleteTodo(id);
       setTodos(prev => prev.filter(todo => todo.id !== id));
     } catch (err) {
-      setError('Todoの削除に失敗しました');
-      console.error(err);
+      setError(`Todoの削除に失敗しました: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
-
+  
+  // ステータス変更
   const changeStatus = async (id: string, newStatus: TodoStatus) => {
-    if (!isClient) return;
     try {
       const updatedTodo = await changeTodoStatus(id, newStatus);
-      setTodos(prev => prev.map(t => t.id === updatedTodo.id ? updatedTodo : t));
+      setTodos(prev => prev.map(t => t.id === id ? updatedTodo : t));
     } catch (err) {
-      setError('ステータスの変更に失敗しました');
-      console.error(err);
+      setError(`ステータスの変更に失敗しました: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
-
+  
+  // 順序更新
   const updateTodoOrder = async (updatedTodos: Todo[]) => {
-    if (!isClient) return;
     try {
       await reorderTodos(updatedTodos);
       setTodos(updatedTodos);
     } catch (err) {
-      setError('並び替えに失敗しました');
-      console.error(err);
+      setError(`順序の更新に失敗しました: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
-
-  // ラベル操作関数
+  
+  // ラベル追加
   const createLabel = async (name: string, color: string) => {
-    if (!isClient) return;
     try {
       const newLabel = await addLabel(name, color);
       setLabels(prev => [...prev, newLabel]);
     } catch (err) {
-      setError('ラベルの作成に失敗しました');
-      console.error(err);
+      setError(`ラベルの追加に失敗しました: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
-
+  
+  // ラベル更新
   const updateLabelItem = async (label: Label) => {
-    if (!isClient) return;
     try {
-      const updatedLabel = await updateLabel(label);
-      setLabels(prev => prev.map(l => l.id === updatedLabel.id ? updatedLabel : l));
+      await updateLabel(label);
+      setLabels(prev => prev.map(l => l.id === label.id ? label : l));
     } catch (err) {
-      setError('ラベルの更新に失敗しました');
-      console.error(err);
+      setError(`ラベルの更新に失敗しました: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
-
+  
+  // ラベル削除
   const removeLabel = async (id: string) => {
-    if (!isClient) return;
     try {
       await deleteLabel(id);
       setLabels(prev => prev.filter(label => label.id !== id));
     } catch (err) {
-      setError('ラベルの削除に失敗しました');
-      console.error(err);
+      setError(`ラベルの削除に失敗しました: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
+  const value = {
+    todos,
+    labels,
+    isLoading,
+    error,
+    statusFilter,
+    labelFilter,
+    isAllTasksCompleted,
+    showPachinkoEffect,
+    createTodo,
+    updateTodoItem,
+    removeTodo,
+    changeStatus,
+    updateTodoOrder,
+    createLabel,
+    updateLabelItem,
+    removeLabel,
+    setStatusFilter,
+    setLabelFilter,
+    hidePachinkoEffect
+  };
+
   return (
-    <TodoContext.Provider
-      value={{
-        todos,
-        labels,
-        isLoading,
-        error,
-        statusFilter,
-        labelFilter,
-        createTodo,
-        updateTodoItem,
-        removeTodo,
-        changeStatus,
-        updateTodoOrder,
-        createLabel,
-        updateLabelItem,
-        removeLabel,
-        setStatusFilter,
-        setLabelFilter
-      }}
-    >
+    <TodoContext.Provider value={value}>
       {children}
     </TodoContext.Provider>
   );

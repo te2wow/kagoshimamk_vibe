@@ -24,13 +24,13 @@ const DB_VERSION = 1;
 
 // サーバーサイドレンダリング時にはダミーのプロミスを返す
 const isServer = typeof window === 'undefined';
-const hasIndexedDB = !isServer && 'indexedDB' in window;
+const hasIndexedDB = !isServer && typeof window !== 'undefined' && 'indexedDB' in window;
 
 export const initDB = async () => {
   // サーバーサイドまたはindexedDBが使用できない環境ではダミーのDBオブジェクトを返す
   if (isServer || !hasIndexedDB) {
     console.info('IndexedDB not available, using dummy DB');
-    return null;
+    return createDummyDB();
   }
 
   try {
@@ -54,9 +54,30 @@ export const initDB = async () => {
     return db;
   } catch (error) {
     console.error('Failed to initialize IndexedDB:', error);
-    return null;
+    return createDummyDB();
   }
 };
 
+// ダミーDBオブジェクトを作成する関数
+function createDummyDB() {
+  // 空のDummyDB（メモリ内のデータストア）
+  const dummyDB = {
+    getAll: async () => [],
+    get: async () => null,
+    put: async () => {},
+    delete: async () => {},
+    getAllFromIndex: async () => [],
+    transaction: () => ({
+      store: {
+        put: async () => {},
+      },
+      done: Promise.resolve(),
+    }),
+    // その他必要なメソッド
+  };
+  
+  return dummyDB;
+}
+
 // クライアントサイドでのみ初期化
-export const dbPromise = !isServer && hasIndexedDB ? initDB() : Promise.resolve(null); 
+export const dbPromise = Promise.resolve(hasIndexedDB ? initDB() : createDummyDB()); 
